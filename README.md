@@ -48,6 +48,27 @@ Home values and costs come from `zip_housing_costs_march_2026 taxes fixed.xlsx` 
 - CBSA boundaries: U.S. Census Bureau, 2025 cartographic CBSAs (`cb_2025_us_cbsa_500k`)
 - Basemap: [OpenFreeMap](https://openfreemap.org) (Positron style) © OpenMapTiles © OpenStreetMap contributors, rendered with [MapLibre GL JS](https://maplibre.org)
 
+## Replication data
+
+The `replication/` folder has every number behind the map as plain CSV files. `sources/` has the California and Florida county tax inputs.
+
+- **`zip_costs.csv`:** one row per ZIP code in the cost file (16,731), with its inputs and results for both home sizes.
+  - `county_fips`, `county_source`: the county used for property tax and how it was matched.
+  - `property_tax_method`: Tax Foundation county rate, CA new buyer or FL new buyer.
+  - `tax_foundation_rate`, `insurance_rate`: annual rates as a share of home value.
+  - `income_2026_03`: the CBSA's wage-adjusted median income. Blank for CBSAs without income data, which aren't on the map.
+  - `zhvi_3br` / `zhvi_4br`, then for each size: `principal_interest`, `pmi`, `property_tax`, `insurance`, `annual_cost` (all annual dollars) and `cost_to_income`.
+- **`cbsa_income.csv`:** each CBSA's 2024 median income from IPUMS (rounded to $100), the AHETPI wage factor (32.12 ÷ 30.12) and the March 2026 income.
+
+No raw source files are included: no IPUMS microdata, and no Zillow, HUD, HOAM or Tax Foundation downloads. The CSVs hold only the values used here, with credit to each source:
+
+- **Zillow:** ZHVI values are Zillow Group data, free for public use with attribution.
+- **IPUMS USA:** the incomes are medians we calculated from IPUMS USA microdata; no microdata is redistributed. Citation: Steven Ruggles, Sarah Flood, Matthew Sobek, Daniel Backman, Grace Cooper, Julia A. Rivera Drew, Stephanie Richards, Renae Rodgers, Jonathan Schroeder, and Kari C.W. Williams. IPUMS USA: Version 16.0 [dataset]. Minneapolis, MN: IPUMS, 2025. https://doi.org/10.18128/D010.V16.0
+- **Tax Foundation:** county rates from Property Taxes by State and County, 2026, licensed [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (noncommercial use with attribution).
+- **GeoNames:** postal-code counties, licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- **Atlanta Fed HOAM:** insurance rates are derived from HOAM's March 2026 insurance and home price figures.
+- **Public government data:** HUD USPS crosswalks, Census boundaries, California BOE, Florida DOR, and BLS wages via FRED. The Optimal Blue rate index is cited, not redistributed.
+
 ## Rebuilding the data
 
 ```
@@ -55,7 +76,7 @@ pip install pandas geopandas openpyxl
 python scripts/build_data.py "<folder containing ZIP_CBSA_122024.xlsx, ZIP-COUNTY_062026.xlsx, zip_housing_costs_march_2026 taxes fixed.xlsx and zhvi 4 bedroom by zip march 2026.xlsx>"
 ```
 
-The first run downloads the Census boundary files into `.cache/`, then writes `data/zips.json` and `data/cbsa.json`.
+The first run downloads the Census boundary files into `.cache/`, then writes `data/zips.json`, `data/cbsa.json` and the `replication/` CSVs.
 
 - **Shape detail:** ZIP shapes are simplified by at most 0.0003° (~30 m) and CBSA shapes by at most 0.001°. On a 2,000-ZIP sample, the median edge error against the Census file is about 25 m and the largest is about 43 m.
 - **Storage:** to keep the files small, shapes are stored as integer coordinate offsets (1e-4°), and `index.html` converts them back when the page loads.

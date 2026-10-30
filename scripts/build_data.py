@@ -20,6 +20,8 @@ CROSSWALK = SRC / 'ZIP_CBSA_122024.xlsx'
 ZIP_COUNTY = SRC / 'ZIP-COUNTY_062026.xlsx'
 FOUR_BED = SRC / 'zhvi 4 bedroom by zip march 2026.xlsx'
 RATES = ROOT / 'sources'
+REPL = ROOT / 'replication'
+WAGE_FACTOR = 32.12 / 30.12   # FRED AHETPI: March 2026 / 2024 annual average
 
 CENSUS = {
     'zcta': 'https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_zcta520_500k.zip',
@@ -77,6 +79,39 @@ def property_tax(v):
     return (t['County property tax rate'] * v).where(~is_ca, ca_tax).where(~is_fl, fl_tax)
 
 
+def write_replication():
+    """Per-ZIP inputs and outputs, plus CBSA incomes, as plain CSVs (derived values only, no raw source files)."""
+    REPL.mkdir(exist_ok=True)
+    ct = pd.read_excel(COSTS, sheet_name='County taxes', header=None, dtype=str)
+    geonames = ct.iloc[7:, :2].dropna().set_index(0)[1]
+    rows = pd.DataFrame({
+        'zip': t['ZIP'], 'cbsa': t['CBSA'], 'city': t['City'].str.title(), 'state': t['State'],
+        'county_fips': fips.where(is_ca | is_fl, t['ZIP'].map(geonames)),
+        'county_source': np.where(is_ca | is_fl, 'HUD ZIP-county crosswalk', 'GeoNames'),
+        'property_tax_method': np.select([is_ca, is_fl], ['CA new buyer', 'FL new buyer'], 'Tax Foundation county rate'),
+        'tax_foundation_rate': t['County property tax rate'], 'insurance_rate': t['Insurance rate'].round(6),
+        'income_2026_03': t['Married median family income'].round(0).astype('Int64'),
+    })
+    for s, val in (('3br', v), ('4br', t['v4'])):
+        rows[f'zhvi_{s}'] = val.round(0).astype('Int64')
+        rows[f'principal_interest_{s}'] = (t['Annual P&I 6.00%'] / v * val).round(2)
+        rows[f'pmi_{s}'] = (t['Annual PMI'] / v * val).round(2)
+        rows[f'property_tax_{s}'] = property_tax(val).round(2)
+        rows[f'insurance_{s}'] = (t['Insurance rate'] * val).round(2)
+        rows[f'annual_cost_{s}'] = annual_cost(val).round(2)
+        rows[f'cost_to_income_{s}'] = (annual_cost(val) / t['Married median family income']).round(6)
+    rows.to_csv(REPL / 'zip_costs.csv', index=False)
+
+    inc = t.dropna(subset=['Married median family income']).drop_duplicates('CBSA')
+    adj = inc['Married median family income']
+    base = (adj / WAGE_FACTOR).round(-2)
+    assert np.allclose(base * WAGE_FACTOR, adj)
+    pd.DataFrame({'cbsa': inc['CBSA'], 'metro': inc['HOAM CBSA'], 'income_2024': base.astype(int),
+                  'wage_factor': round(WAGE_FACTOR, 6), 'income_2026_03': adj.round(2)}
+                 ).sort_values('cbsa').to_csv(REPL / 'cbsa_income.csv', index=False)
+    return f'{len(rows)} ZIPs, {len(inc)} CBSAs'
+
+
 # P&I, PMI and insurance are fixed shares of the home value, so the same per-ZIP rates price any home
 rate = (t['Annual P&I 6.00%'] + t['Annual PMI']) / v + t['Insurance rate']
 annual_cost = lambda v: rate * v + property_tax(v)
@@ -90,6 +125,7 @@ four = pd.read_excel(FOUR_BED, dtype={'RegionName': str})
 t['v4'] = t['ZIP'].map(four.set_index(four['RegionName'].str.zfill(5))['March 2026 home value'])
 t['cost4'] = annual_cost(t['v4'])
 t['r4'] = t['cost4'] / t['Married median family income']
+print('replication files:', write_replication())
 in_file = t.set_index('ZIP')   # every ZIP in the file, including ones without a ratio
 t = t[t['Housing / income 6.00%'].notna()]
 
