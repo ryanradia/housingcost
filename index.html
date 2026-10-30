@@ -7,7 +7,7 @@
 <meta name="description" content="ZIP codes where March 2026 ownership costs for a 3- or 4-bedroom home at a 6% mortgage rate exceed 31% of CBSA median family income.">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <style>
-  :root { --over:#d7462b; --under:#2e9e5b; --gray:#9aa4ae; --ink:#1f2933; --muted:#52606d; --line:#d9dee3; }
+  :root { --over:#cb181d; --under:#238b45; --gray:#9aa4ae; --ink:#1f2933; --muted:#52606d; --line:#d9dee3; }
   html, body { margin:0; height:100%; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:#f2f3f0; }
   #map { position:absolute; inset:0; }
   .panel { position:absolute; z-index:2; top:12px; left:12px; width:320px; max-width:calc(100vw - 24px); box-sizing:border-box;
@@ -46,6 +46,18 @@
   #about ul { padding-left:20px; }
   #about .formula { background:#f4f6f8; border-radius:6px; padding:8px 12px; font-size:13px; }
   .sub .short { display:none; }
+  .scale-title { font-size:12px; font-weight:600; margin-bottom:4px; }
+  .scale-title .muted { font-weight:400; }
+  .scale { display:flex; height:16px; border-radius:3px; overflow:hidden; }
+  .scale button { flex:1; border:0; padding:0; cursor:pointer; }
+  .scale button:nth-child(6) { box-shadow:inset 2px 0 0 #fff; }   /* the 31% line */
+  .scale button[aria-pressed="false"] { opacity:0.15; }
+  .scale button:focus-visible { outline:2px solid var(--ink); outline-offset:-2px; }
+  .ticks { position:relative; height:16px; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .ticks span { position:absolute; top:2px; transform:translateX(-50%); }
+  .ticks span.key { color:var(--ink); font-weight:700; }
+  .scale-foot { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin:2px 0 6px; }
+  .scale-foot b { color:var(--ink); font-variant-numeric:tabular-nums; }
   @media (max-width:600px) {
     .panel { top:8px; left:8px; right:8px; width:auto; padding:8px 10px; font-size:12px; line-height:1.35; }
     .panel h1 { font-size:13px; padding-right:28px; }
@@ -78,9 +90,11 @@
       <span class="long">Annual cost in each ZIP code of owning the typical <span class="beds">3</span>-bedroom home (6.0% 30-year fixed rate mortgage, 10% down; plus county effective property tax, homeowners insurance, and PMI) as a share of the metro area’s median income for non-elderly married couple families</span>
       <span class="short">Annual cost in each ZIP code of owning the typical <span class="beds">3</span>-bedroom home as a share of the metro area’s median income for non-elderly married couple families</span>
     </div>
+    <div class="scale-title">Share of income <span class="muted">(click a band to hide it)</span></div>
+    <div class="scale" id="scale" role="group" aria-label="Cost as a share of income"></div>
+    <div class="ticks" id="ticks" aria-hidden="true"></div>
+    <div class="scale-foot"><span>31% or less <b id="n-under"></b></span><span>Over 31% <b id="n-over"></b></span></div>
     <div class="legend">
-      <label class="row"><input type="checkbox" data-k="over" checked><span class="sw" style="background:var(--over)"></span>Over 31% of income<b id="n-over"></b></label>
-      <label class="row"><input type="checkbox" data-k="under" checked><span class="sw" style="background:var(--under)"></span>31% or less<b id="n-under"></b></label>
       <label class="row"><input type="checkbox" data-k="nodata" checked><span class="sw" style="background:var(--gray)"></span>No data<b id="n-nodata"></b></label>
       <label class="row"><input type="checkbox" id="cbsa-toggle" checked><span class="ln"></span>Metro areas<b id="n-cbsa"></b></label>
     </div>
@@ -156,9 +170,23 @@
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script>
 const LIMIT = 0.31;
-const COLORS = { over:'#d7462b', under:'#2e9e5b', nodata:'#9aa4ae' };
+const COLORS = { over:'#cb181d', under:'#238b45', nodata:'#9aa4ae' };
 const usd = n => '$' + Math.round(n).toLocaleString('en-US');
 const pct = r => (r * 100).toFixed(1) + '%';
+
+// color bands for the cost-to-income ratio; a band holds ratios above the previous cut up to its own
+const CUTS = [0.15, 0.20, 0.24, 0.28, 0.31, 0.35, 0.40, 0.45, 0.50];
+const BANDS = ['#00441b', '#238b45', '#41ab5d', '#74c476', '#a1d99b', '#fcbba1', '#fc9272', '#fb6a4a', '#cb181d', '#67000d'];
+const BAND_NAMES = ['Under 15%', '15–20%', '20–24%', '24–28%', '28–31%', '31–35%', '35–40%', '40–45%', '45–50%', '50% and up'];
+const band = r => CUTS.filter(c => r > c).length;
+const inkOn = hex => {   // dark text on light swatches
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#1f2933' : '#fff';
+};
+document.getElementById('scale').innerHTML = BANDS.map((c, i) =>
+  `<button data-band="${i}" aria-pressed="true" style="background:${c}" title="${BAND_NAMES[i]}" aria-label="${BAND_NAMES[i]}"></button>`).join('');
+document.getElementById('ticks').innerHTML = CUTS.map((c, i) =>
+  `<span${c === LIMIT ? ' class="key"' : ''} style="left:${(i + 1) * 10}%">${Math.round(c * 100)}${i === CUTS.length - 1 ? '%' : ''}</span>`).join('');
 
 // data/*.json rows: properties plus g = polygons of delta-encoded integer rings (1e-4 degrees)
 function unpack(rows) {
@@ -206,11 +234,20 @@ map.on('load', async () => {
   const sfx = () => beds === 4 ? '4' : '';
   zipPts.features.forEach(f => {
     const p = f.properties;
-    for (const s of ['', '4']) p['l2' + s] = p['k' + s] === 'nodata' ? 'no data' : pct(p['r' + s]);
+    for (const s of ['', '4']) {
+      p['l2' + s] = p['k' + s] === 'nodata' ? 'no data' : pct(p['r' + s]);
+      p['b' + s] = p['k' + s] === 'nodata' ? -1 : band(p['r' + s]);   // -1 = no data
+    }
   });
 
   const counts = { '':{ over:0, under:0, nodata:0 }, '4':{ over:0, under:0, nodata:0 } };
-  zips.features.forEach(f => { for (const s in counts) counts[s][f.properties['k' + s]]++; });
+  const bandCounts = { '':BANDS.map(() => 0), '4':BANDS.map(() => 0) };
+  zips.features.forEach(f => {
+    for (const s in counts) {
+      counts[s][f.properties['k' + s]]++;
+      if (f.properties['b' + s] >= 0) bandCounts[s][f.properties['b' + s]]++;
+    }
+  });
   document.getElementById('n-cbsa').textContent = cbsa.features.length;
   document.getElementById('status').remove();
 
@@ -224,7 +261,7 @@ map.on('load', async () => {
   if (map.getLayer('landuse_residential')) map.setLayoutProperty('landuse_residential', 'visibility', 'none');
   const BELOW_WATER = 'water', BELOW_LABELS = 'waterway_line_label', BELOW_PLACES = 'label_other';
   map.addLayer({ id:'zip-fill', type:'fill', source:'zips',
-    paint:{ 'fill-opacity':['interpolate', ['linear'], ['zoom'], 4, 0.8, 12, 0.6] } }, BELOW_WATER);
+    paint:{ 'fill-opacity':['interpolate', ['linear'], ['zoom'], 4, 0.75, 12, 0.5] } }, BELOW_WATER);
   map.addLayer({ id:'zip-line', type:'line', source:'zips', minzoom:7,
     paint:{ 'line-color':'#ffffff', 'line-opacity':0.7, 'line-width':['interpolate', ['linear'], ['zoom'], 7, 0.2, 12, 1] } }, BELOW_WATER);
   map.addLayer({ id:'cbsa-line', type:'line', source:'cbsa',
@@ -268,7 +305,8 @@ map.on('load', async () => {
       return `<b>ZIP ${p.zip}</b> <span class="tag" style="background:#7b8794">No data</span><br>${where}<br>
               <span class="muted">${why}</span>`;
     }
-    return `<b>ZIP ${p.zip}</b> <span class="tag" style="background:${COLORS[k]}">${pct(p['r' + s])} of income</span><br>${where}
+    const c = BANDS[p['b' + s]];
+    return `<b>ZIP ${p.zip}</b> <span class="tag" style="background:${c};color:${inkOn(c)}">${pct(p['r' + s])} of income</span><br>${where}
       <table class="pop"><tr><td>${beds}-bedroom home value (ZHVI)</td><td>${usd(p['v' + s])}</td></tr>
       <tr><td>Annual cost at 6%</td><td>${usd(p['cost' + s])}</td></tr>
       <tr><td>Median income, married couples 18–64</td><td>${usd(p.inc)}</td></tr></table>`;
@@ -286,12 +324,17 @@ map.on('load', async () => {
   });
 
   // legend toggles and the 3/4-bedroom switch
-  const shown = new Set(['over', 'under', 'nodata']);
+  const shown = new Set([-1, ...BANDS.keys()]);   // band numbers, -1 = no data
   function render() {
-    const k = ['get', 'k' + sfx()];
-    const filter = ['in', k, ['literal', [...shown]]];
+    const k = ['get', 'k' + sfx()], b = ['get', 'b' + sfx()];
+    const filter = ['in', b, ['literal', [...shown]]];
     ['zip-fill', 'zip-line', 'zip-hover', 'zip-label'].forEach(id => map.setFilter(id, filter));
-    map.setPaintProperty('zip-fill', 'fill-color', ['match', k, 'over', COLORS.over, 'under', COLORS.under, COLORS.nodata]);
+    map.setPaintProperty('zip-fill', 'fill-color', ['match', b, ...BANDS.flatMap((c, i) => [i, c]), COLORS.nodata]);
+    document.querySelectorAll('[data-band]').forEach(el => {
+      const i = +el.dataset.band;
+      el.setAttribute('aria-pressed', String(shown.has(i)));
+      el.title = `${BAND_NAMES[i]}: ${bandCounts[sfx()][i].toLocaleString('en-US')} ZIPs`;
+    });
     map.setPaintProperty('zip-label', 'text-color', ['case', ['==', k, 'nodata'], '#4b5560', '#1f2933']);
     map.setLayoutProperty('zip-label', 'text-field', ['format', ['get', 'zip'], { 'text-font':['literal', ['Noto Sans Bold']] },
       '\n', {}, ['get', 'l2' + sfx()], { 'font-scale':0.9 }]);
@@ -300,8 +343,13 @@ map.on('load', async () => {
     document.querySelectorAll('.beds').forEach(e => e.textContent = beds);
     document.querySelectorAll('[data-beds]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.beds === beds)));
   }
-  document.querySelectorAll('input[data-k]').forEach(cb => cb.addEventListener('change', () => {
-    cb.checked ? shown.add(cb.dataset.k) : shown.delete(cb.dataset.k);
+  document.querySelector('input[data-k="nodata"]').addEventListener('change', e => {
+    e.target.checked ? shown.add(-1) : shown.delete(-1);
+    render();
+  });
+  document.querySelectorAll('[data-band]').forEach(el => el.addEventListener('click', () => {
+    const i = +el.dataset.band;
+    shown.has(i) ? shown.delete(i) : shown.add(i);
     render();
   }));
   document.querySelectorAll('[data-beds]').forEach(b => b.addEventListener('click', () => {

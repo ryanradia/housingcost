@@ -3,8 +3,8 @@ March 2026
 
 An interactive map of ZIP codes across 258 U.S. metropolitan areas (core-based statistical areas, or CBSAs). For each ZIP code, the map shows whether the annual cost of owning a typical 3-bedroom or 4-bedroom home is more than **31% of the area's median family income for nonelderly married-couple households**. It assumes a 6% 30-year fixed-rate mortgage, a 10% down payment and other assumptions from the Atlanta Fed's [Home Ownership Affordability Monitor](https://www.atlantafed.org/research-and-data/data/home-ownership-affordability-monitor).
 
-- **Red:** housing cost is over 31% of family income.
-- **Green:** housing cost is 31% of family income or less.
+- **Red:** housing cost is over 31% of family income, in bands of 31–35%, 35–40%, 40–45%, 45–50% and 50% and up (darker is higher).
+- **Green:** housing cost is 31% of family income or less, in bands of under 15%, 15–20%, 20–24%, 24–28% and 28–31% (darker is lower).
 - **Gray:** the ZIP code is inside a covered CBSA, but data isn't available. This is usually because there's no Zillow home value for it.
 
 ## View it
