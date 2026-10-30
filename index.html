@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Housing Cost Burden Map</title>
+<meta name="description" content="ZIP codes where March 2026 ownership costs for a 3- or 4-bedroom home at a 6% mortgage rate exceed 31% of CBSA median family income.">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+  :root { --over:#d7462b; --under:#2e9e5b; --gray:#9aa4ae; --ink:#1f2933; --muted:#52606d; --line:#d9dee3; }
+  html, body { margin:0; height:100%; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:#f2f3f0; }
+  #map { position:absolute; inset:0; }
+  .panel { position:absolute; z-index:2; top:12px; left:12px; width:320px; max-width:calc(100vw - 24px); box-sizing:border-box;
+           background:#fffffff2; padding:12px 14px; border-radius:8px; box-shadow:0 2px 12px #0002; font-size:13px; line-height:1.45; }
+  .panel h1 { font-size:15px; margin:0 0 2px; }
+  .sub { color:var(--muted); margin-bottom:8px; }
+  .row { display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none; padding:1px 0; }
+  .row b { margin-left:auto; font-variant-numeric:tabular-nums; }
+  .row input { margin:0; }
+  .sw { width:12px; height:12px; border-radius:2px; flex:none; }
+  .ln { width:14px; border-top:2px solid #26313b; flex:none; margin:0 -1px; }
+  #q { width:100%; box-sizing:border-box; margin-top:8px; padding:6px 8px; border:1px solid #ccd; border-radius:6px; font:inherit; }
+  .note { color:var(--muted); font-size:12px; margin-top:6px; }
+  #toggle { display:none; }
+  #status { color:var(--muted); font-size:12px; margin-top:6px; }
+  .seg { display:flex; margin:0 0 8px; border:1px solid #c5ccd3; border-radius:6px; overflow:hidden; }
+  .seg button { flex:1; border:0; background:#fff; padding:5px 0; font:inherit; color:var(--muted); cursor:pointer; }
+  .seg button + button { border-left:1px solid #c5ccd3; }
+  .seg button[aria-pressed="true"] { background:var(--ink); color:#fff; font-weight:600; }
+  .maplibregl-popup-content { font:13px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; padding:10px 14px; }
+  .pop td { padding:1px 0; } .pop td:last-child { text-align:right; padding-left:14px; font-variant-numeric:tabular-nums; }
+  .tag { display:inline-block; padding:1px 6px; border-radius:10px; color:#fff; font-size:11px; font-weight:600; }
+  .muted { color:var(--muted); }
+  .note a, #about a { color:#1d5fa8; }
+  #about { width:min(680px, calc(100vw - 32px)); max-height:calc(100vh - 48px); box-sizing:border-box; padding:0;
+           border:0; border-radius:10px; box-shadow:0 10px 40px #0005; color:var(--ink); }
+  #about::backdrop { background:#1f293366; }
+  #about .head { position:sticky; top:0; display:flex; align-items:center; padding:14px 20px; background:#fff;
+                 border-bottom:1px solid #e4e7eb; }
+  #about .head h2 { font-size:17px; margin:0; }
+  #about .head button { margin-left:auto; border:0; background:none; font-size:22px; line-height:1; cursor:pointer; color:var(--muted); }
+  #about .content { padding:4px 20px 20px; font-size:14px; line-height:1.55; }
+  #about h3 { font-size:14px; margin:18px 0 4px; }
+  #about p, #about ul { margin:4px 0 8px; }
+  #about ul { padding-left:20px; }
+  #about .formula { background:#f4f6f8; border-radius:6px; padding:8px 12px; font-size:13px; }
+  .sub .short { display:none; }
+  @media (max-width:600px) {
+    .panel { top:8px; left:8px; right:8px; width:auto; padding:8px 10px; font-size:12px; line-height:1.35; }
+    .panel h1 { font-size:13px; padding-right:28px; margin-bottom:6px; }
+    .sub .long, .note .long { display:none; }
+    .sub .short { display:inline; }
+    .sub { margin-bottom:6px; }
+    .seg { margin-bottom:6px; } .seg button { padding:4px 0; }
+    .legend { display:grid; grid-template-columns:1fr 1fr; column-gap:14px; }
+    #q { margin-top:6px; padding:4px 8px; font-size:16px; }   /* 16px stops iOS zooming in on focus */
+    .note { margin-top:4px; }
+    #toggle { display:block; position:absolute; top:4px; right:6px; border:0; background:none; font-size:18px; cursor:pointer; padding:4px; }
+    .panel.collapsed .body { display:none; }
+    .panel.collapsed .seg { margin-bottom:0; }
+    .maplibregl-ctrl-top-right { display:none; }   /* pinch to zoom instead */
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel" id="panel">
+  <button id="toggle" aria-label="Show or hide legend" aria-expanded="true">☰</button>
+  <h1>Home cost vs. family income, March 2026</h1>
+  <div class="seg" role="group" aria-label="Home size">
+    <button data-beds="3" aria-pressed="true">3-bedroom homes</button><button data-beds="4" aria-pressed="false">4-bedroom homes</button>
+  </div>
+  <div class="body">
+    <div class="sub">
+      <span class="long">Yearly cost of owning a typical <span class="beds">3</span>-bedroom home (6% mortgage with 10% down, plus property tax and insurance) as a share of the metro area's median income for married couples, both spouses aged 18–64.</span>
+      <span class="short">Cost to own a typical <span class="beds">3</span>-bedroom home vs. the metro's median income for married couples aged 18–64.</span>
+    </div>
+    <div class="legend">
+      <label class="row"><input type="checkbox" data-k="over" checked><span class="sw" style="background:var(--over)"></span>Over 31% of income<b id="n-over"></b></label>
+      <label class="row"><input type="checkbox" data-k="under" checked><span class="sw" style="background:var(--under)"></span>31% or less<b id="n-under"></b></label>
+      <label class="row"><input type="checkbox" data-k="nodata" checked><span class="sw" style="background:var(--gray)"></span>No data<b id="n-nodata"></b></label>
+      <label class="row"><input type="checkbox" id="cbsa-toggle" checked><span class="ln"></span>Metro areas<b id="n-cbsa"></b></label>
+    </div>
+    <input id="q" placeholder="Find a ZIP, e.g. 11201" inputmode="numeric" maxlength="5">
+    <div class="note"><span class="long">Metro names appear as you zoom in, then ZIP labels. Click a ZIP for details. </span><a href="#" id="about-open">Methodology &amp; sources</a></div>
+    <div id="status">Loading data…</div>
+  </div>
+</div>
+<dialog id="about">
+  <div class="head"><h2>Methodology &amp; sources</h2><button id="about-close" aria-label="Close">×</button></div>
+  <div class="content">
+    <p>For each ZIP code, the map shows whether the annual cost of owning a typical 3-bedroom or 4-bedroom home exceeds 31% of the area's median family income for nonelderly married-couple households. It assumes a 6% 30-year fixed-rate mortgage, a 10% down payment and other assumptions from the Atlanta Fed's <a href="https://www.atlantafed.org/research-and-data/data/home-ownership-affordability-monitor" target="_blank" rel="noopener">Home Ownership Affordability Monitor</a>. The switch at the top of the legend changes the home size.</p>
+    <div class="formula">Ratio = annual ownership cost at a 6% 30-year fixed mortgage rate ÷ median family income for nonelderly married couples in the CBSA<br>
+      <span style="color:var(--over)">■</span> over 31% &nbsp; <span style="color:var(--under)">■</span> 31% or less &nbsp; <span style="color:var(--gray)">■</span> data not available</div>
+    <p>31% is FHA's standard guideline for the maximum housing payment as a share of income, also known as the front-end ratio. Gray means the ZIP code is inside a covered CBSA, but data isn't available. This is usually because there's no Zillow home value for it.</p>
+    <p>For California and Florida, property taxes use new-buyer effective rates instead, as described below.</p>
+
+    <h3>Home values</h3>
+    <p>Home values are the Zillow Home Value Index (ZHVI) for 3-bedroom and 4-bedroom homes, March 2026. This is the mid-tier series (33rd to 67th price percentiles), smoothed and seasonally adjusted. See the <a href="https://www.zillow.com/research/methodology-neural-zhvi-32128/" target="_blank" rel="noopener">ZHVI methodology</a> and <a href="https://www.zillow.com/research/data/" target="_blank" rel="noopener">Zillow data</a>. Both home sizes use the same cost assumptions and income.</p>
+
+    <h3>Income</h3>
+    <p>Metro area median family income for married-couple families where neither spouse is elderly (both aged 18–64), from the 2024 <a href="https://www.census.gov/programs-surveys/acs" target="_blank" rel="noopener">American Community Survey</a> 5-year sample, using <a href="https://usa.ipums.org/usa/" target="_blank" rel="noopener">IPUMS USA</a> microdata. Income is total family income in 2024 dollars, for metro areas approximated from Public Use Microdata Areas (PUMAs).</p>
+    <p>Incomes are updated to March 2026 using FRED's <a href="https://fred.stlouisfed.org/series/AHETPI" target="_blank" rel="noopener">Average Hourly Earnings of Production and Nonsupervisory Employees, Total Private</a> (AHETPI): the 2024 income is multiplied by the March 2026 value divided by the 2024 annual average. (That's an increase of about 6.6% across the board.)</p>
+
+    <h3>Housing costs</h3>
+    <p>Following the Atlanta Fed's <a href="https://www.atlantafed.org/research-and-data/data/home-ownership-affordability-monitor" target="_blank" rel="noopener">Home Ownership Affordability Monitor</a> (HOAM; see its <a href="https://www.atlantafed.org/research-and-data/data/home-ownership-affordability-monitor/explainer" target="_blank" rel="noopener">explainer</a>), costs add up:</p>
+    <ul>
+      <li>principal and interest on a 30-year fixed-rate loan for 90% of the ZHVI, assuming 10% down,</li>
+      <li>property tax at the county's rate, as described below,</li>
+      <li>homeowners insurance at the CBSA's effective rate, based on HOAM's March 2026 monthly insurance amount,</li>
+      <li>private mortgage insurance (PMI) at 0.558% of the loan per year.</li>
+    </ul>
+    <p>The down payment, closing costs, maintenance, utilities and HOA fees are excluded.</p>
+
+    <h3>Property tax</h3>
+    <p>The county's effective rate from the Tax Foundation's <a href="https://taxfoundation.org/data/all/state/property-taxes-by-state-county/" target="_blank" rel="noopener">Property Taxes by State and County, 2026</a> (based on 2024 5-year ACS estimates), multiplied by each ZIP code's ZHVI. California and Florida reassess homes at sale, so their property taxes are adjusted:</p>
+    <ul>
+      <li><b>California:</b> the county's average tax rate (the 1% Prop 13 rate plus voter-approved debt) from the Board of Equalization's <a href="https://www.boe.ca.gov/legdiv/2024-2025/pub306.pdf" target="_blank" rel="noopener">2024-25 Annual Report</a> × (ZHVI − $7,000 homeowners' exemption).</li>
+      <li><b>Florida:</b> each county's school and non-school tax rates, calculated as taxes levied ÷ taxable value from the Department of Revenue's <a href="https://floridarevenue.com/property/Documents/2025_County_Profiles.pdf" target="_blank" rel="noopener">2025 County Property Tax Overviews</a>. Tax = school mills/1000 × (0.85 × ZHVI − $25,000) + non-school mills/1000 × (0.85 × ZHVI − $50,000). The 0.85 reflects Florida's assessment at sale price less 15% for costs of sale; the dollar amounts are homestead exemptions.</li>
+    </ul>
+
+    <h3>County matching</h3>
+    <p>ZIP codes are matched to counties using <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a> postal-code counties, with Connecticut planning regions via a crosswalk. For California and Florida, they use HUD's <a href="https://www.huduser.gov/portal/datasets/usps_crosswalk.html" target="_blank" rel="noopener">USPS ZIP–county crosswalk</a> (June 2026); each ZIP is assigned to the county with most of its residential addresses.</p>
+
+    <h3>Mortgage rate</h3>
+    <p>6% is the average 30-year FHA rate for March 2026, rounded to the nearest 0.1%, based on the Optimal Blue <a href="https://fred.stlouisfed.org/series/OBMMIFHA30YF" target="_blank" rel="noopener">30-Year Fixed Rate FHA Mortgage Index</a> for that month.</p>
+
+    <h3>Caveats</h3>
+    <ul>
+      <li>Property tax rates are county averages, and insurance rates are CBSA averages. Actual rates vary by town, school district and individual property.</li>
+      <li>Special assessments aren't included, such as California's Mello-Roos and parcel taxes or Florida's flat fees for fire, trash and stormwater.</li>
+      <li>HOA fees aren't included.</li>
+      <li>The ZHVI is an estimate of a typical home value, not of recent sale prices in the area.</li>
+      <li>ZIP codes are assigned to CBSAs using HUD's December 2024 <a href="https://www.huduser.gov/portal/datasets/usps_crosswalk.html" target="_blank" rel="noopener">USPS ZIP–CBSA crosswalk</a>. Each ZIP code goes to the CBSA that holds most of its residential addresses. Connecticut ZIPs were assigned separately, using the crosswalk provided in the cost file.</li>
+    </ul>
+
+    <h3>Data sources</h3>
+    <ul>
+      <li>ZIP boundaries: U.S. Census Bureau, 2020 cartographic ZCTAs (<a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html" target="_blank" rel="noopener">cb_2020_us_zcta520_500k</a>)</li>
+      <li>CBSA boundaries: U.S. Census Bureau, 2025 cartographic CBSAs (cb_2025_us_cbsa_500k)</li>
+      <li>Basemap: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> (Positron style) © OpenMapTiles © OpenStreetMap contributors, rendered with <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre GL JS</a></li>
+    </ul>
+
+    <h3>Updates</h3>
+    <ul>
+      <li><b>October 30, 2026:</b> added the 4-bedroom view.</li>
+      <li><b>October 29, 2026:</b> property tax changed from CBSA-wide HOAM rates to county rates (Tax Foundation), with new-buyer estimates for California and Florida.</li>
+    </ul>
+  </div>
+</dialog>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+const LIMIT = 0.31;
+const COLORS = { over:'#d7462b', under:'#2e9e5b', nodata:'#9aa4ae' };
+const usd = n => '$' + Math.round(n).toLocaleString('en-US');
+const pct = r => (r * 100).toFixed(1) + '%';
+
+// data/*.json rows: properties plus g = polygons of delta-encoded integer rings (1e-4 degrees)
+function unpack(rows) {
+  const polys = [], points = [];
+  rows.forEach((row, i) => {
+    const { g, lng, lat, ...p } = row;
+    const coordinates = g.map(poly => poly.map(r => {
+      const out = []; let x = 0, y = 0;
+      for (let j = 0; j < r.length; j += 2) { x += r[j]; y += r[j + 1]; out.push([x / 1e4, y / 1e4]); }
+      return out;
+    }));
+    polys.push({ type:'Feature', id:i, properties:p, geometry:{ type:'MultiPolygon', coordinates } });
+    points.push({ type:'Feature', id:i, properties:p, geometry:{ type:'Point', coordinates:[lng, lat] } });
+  });
+  return [{ type:'FeatureCollection', features:polys }, { type:'FeatureCollection', features:points }];
+}
+
+const map = new maplibregl.Map({
+  container:'map',
+  style:'https://tiles.openfreemap.org/styles/positron',
+  bounds:[[-125, 24.5], [-66.5, 49.5]],
+  fitBoundsOptions:{ padding: window.innerWidth > 600 ? { top:20, bottom:20, left:340, right:20 }
+    : { top:document.getElementById('panel').offsetHeight + 16, bottom:20, left:10, right:10 } },
+  maxBounds:[[-195, 12], [-50, 74]],
+  minZoom:2.5, maxZoom:15,
+});
+map.addControl(new maplibregl.NavigationControl({ showCompass:false }), 'top-right');
+map.addControl(new maplibregl.ScaleControl({ unit:'imperial' }), 'bottom-right');
+
+const data = Promise.all(['data/zips.json', 'data/cbsa.json'].map(u => fetch(u).then(r => {
+  if (!r.ok) throw new Error(`Could not load ${u} (HTTP ${r.status}).`);
+  return r.json();
+})));
+data.catch(err => {
+  const s = document.getElementById('status');
+  if (s) { s.textContent = err.message; s.style.color = '#b42318'; }
+});
+
+map.on('load', async () => {
+  const [zipRows, cbsaRows] = await data;
+  const [zips, zipPts] = unpack(zipRows);
+  const [cbsa, cbsaPts] = unpack(cbsaRows);
+  // 3-bedroom fields are k, v, cost, r; 4-bedroom fields add a "4" suffix
+  let beds = new URLSearchParams(location.search).get('beds') === '4' ? 4 : 3;
+  const sfx = () => beds === 4 ? '4' : '';
+  zipPts.features.forEach(f => {
+    const p = f.properties;
+    for (const s of ['', '4']) p['l2' + s] = p['k' + s] === 'nodata' ? 'no data' : pct(p['r' + s]);
+  });
+
+  const counts = { '':{ over:0, under:0, nodata:0 }, '4':{ over:0, under:0, nodata:0 } };
+  zips.features.forEach(f => { for (const s in counts) counts[s][f.properties['k' + s]]++; });
+  document.getElementById('n-cbsa').textContent = cbsa.features.length;
+  document.getElementById('status').remove();
+
+  map.addSource('zips', { type:'geojson', data:zips, tolerance:0.3 });
+  map.addSource('zip-pts', { type:'geojson', data:zipPts });
+  map.addSource('cbsa', { type:'geojson', data:cbsa });
+  map.addSource('cbsa-pts', { type:'geojson', data:cbsaPts });
+
+  // Fills and outlines sit under the basemap's water, roads and labels.
+  // The basemap's residential shading would otherwise speckle white over the fills.
+  if (map.getLayer('landuse_residential')) map.setLayoutProperty('landuse_residential', 'visibility', 'none');
+  const BELOW_WATER = 'water', BELOW_LABELS = 'waterway_line_label', BELOW_PLACES = 'label_other';
+  map.addLayer({ id:'zip-fill', type:'fill', source:'zips',
+    paint:{ 'fill-opacity':['interpolate', ['linear'], ['zoom'], 4, 0.8, 12, 0.6] } }, BELOW_WATER);
+  map.addLayer({ id:'zip-line', type:'line', source:'zips', minzoom:7,
+    paint:{ 'line-color':'#ffffff', 'line-opacity':0.7, 'line-width':['interpolate', ['linear'], ['zoom'], 7, 0.2, 12, 1] } }, BELOW_WATER);
+  map.addLayer({ id:'cbsa-line', type:'line', source:'cbsa',
+    paint:{ 'line-color':'#26313b', 'line-width':['interpolate', ['linear'], ['zoom'], 3, 0.6, 10, 2] } }, BELOW_WATER);
+  map.addLayer({ id:'zip-hover', type:'line', source:'zips',
+    paint:{ 'line-color':'#111', 'line-width':2, 'line-opacity':['case', ['boolean', ['feature-state', 'hover'], false], 1, 0] } }, BELOW_LABELS);
+  map.addLayer({ id:'zip-label', type:'symbol', source:'zip-pts', minzoom:11,
+    layout:{ 'text-font':['Noto Sans Regular'], 'text-size':11, 'text-padding':1 },
+    paint:{ 'text-halo-color':'#fff', 'text-halo-width':1.4 } }, BELOW_PLACES);
+  map.addLayer({ id:'cbsa-label', type:'symbol', source:'cbsa-pts', minzoom:6, maxzoom:11,
+    layout:{ 'text-field':['get', 'name'], 'text-font':['Noto Sans Bold'], 'text-size':12, 'text-max-width':12 },
+    paint:{ 'text-color':'#26313b', 'text-halo-color':'#fff', 'text-halo-width':1.6 } }, BELOW_PLACES);
+
+  // hover + popups
+  let hovered = null;
+  map.on('mousemove', 'zip-fill', e => {
+    map.getCanvas().style.cursor = 'pointer';
+    const id = e.features[0].id;
+    if (hovered !== null && hovered !== id) map.setFeatureState({ source:'zips', id:hovered }, { hover:false });
+    hovered = id; map.setFeatureState({ source:'zips', id }, { hover:true });
+  });
+  map.on('mouseleave', 'zip-fill', () => {
+    map.getCanvas().style.cursor = '';
+    if (hovered !== null) map.setFeatureState({ source:'zips', id:hovered }, { hover:false });
+    hovered = null;
+  });
+  function summary(c) {
+    const s = sfx();
+    if (!c) return '';
+    const n = c['n' + s] || 0, nodata = `${c['nodata' + s]} ZIPs with no data`;
+    if (!n) return `<span class="muted">${nodata}</span>`;
+    return `<span class="muted">${c['over' + s]} of ${n} ZIPs over 31% · median ${pct(c['med' + s])}<br>${nodata}</span>`;
+  }
+  const cbsaById = Object.fromEntries(cbsa.features.map(f => [f.properties.id, f.properties]));
+  function zipPopup(p) {
+    const s = sfx(), k = p['k' + s];
+    const where = `${p.city ? p.city + ', ' + p.st + '<br>' : ''}<span class="muted">${p.cname || ''} (CBSA ${p.cbsa})</span>`;
+    if (k === 'nodata') {
+      const why = p.why || (p.k !== 'nodata' ? 'No March 2026 4-bedroom ZHVI for this ZIP.'
+        : 'Not in the housing cost file, which covers ZIPs with a March 2026 3-bedroom ZHVI.');
+      return `<b>ZIP ${p.zip}</b> <span class="tag" style="background:#7b8794">No data</span><br>${where}<br>
+              <span class="muted">${why}</span>`;
+    }
+    return `<b>ZIP ${p.zip}</b> <span class="tag" style="background:${COLORS[k]}">${pct(p['r' + s])} of income</span><br>${where}
+      <table class="pop"><tr><td>${beds}-bedroom home value (ZHVI)</td><td>${usd(p['v' + s])}</td></tr>
+      <tr><td>Annual cost at 6%</td><td>${usd(p['cost' + s])}</td></tr>
+      <tr><td>Median income, married couples 18–64</td><td>${usd(p.inc)}</td></tr></table>`;
+  }
+  let popup = null;
+  const openPopup = (lngLat, html) => {
+    popup = new maplibregl.Popup({ maxWidth:'320px' }).setLngLat(lngLat).setHTML(html).addTo(map);
+  };
+  map.on('click', 'zip-fill', e => {
+    const p = e.features[0].properties;
+    const html = map.getZoom() < 8
+      ? `<b>${p.cname}</b><br>${summary(cbsaById[p.cbsa])}<hr style="border:0;border-top:1px solid #e4e7eb;margin:6px 0">${zipPopup(p)}`
+      : zipPopup(p);
+    openPopup(e.lngLat, html);
+  });
+
+  // legend toggles and the 3/4-bedroom switch
+  const shown = new Set(['over', 'under', 'nodata']);
+  function render() {
+    const k = ['get', 'k' + sfx()];
+    const filter = ['in', k, ['literal', [...shown]]];
+    ['zip-fill', 'zip-line', 'zip-hover', 'zip-label'].forEach(id => map.setFilter(id, filter));
+    map.setPaintProperty('zip-fill', 'fill-color', ['match', k, 'over', COLORS.over, 'under', COLORS.under, COLORS.nodata]);
+    map.setPaintProperty('zip-label', 'text-color', ['case', ['==', k, 'nodata'], '#4b5560', '#1f2933']);
+    map.setLayoutProperty('zip-label', 'text-field', ['format', ['get', 'zip'], { 'text-font':['literal', ['Noto Sans Bold']] },
+      '\n', {}, ['get', 'l2' + sfx()], { 'font-scale':0.9 }]);
+    const c = counts[sfx()];
+    for (const key in c) document.getElementById('n-' + key).textContent = c[key].toLocaleString('en-US');
+    document.querySelectorAll('.beds').forEach(e => e.textContent = beds);
+    document.querySelectorAll('[data-beds]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.beds === beds)));
+  }
+  document.querySelectorAll('input[data-k]').forEach(cb => cb.addEventListener('change', () => {
+    cb.checked ? shown.add(cb.dataset.k) : shown.delete(cb.dataset.k);
+    render();
+  }));
+  document.querySelectorAll('[data-beds]').forEach(b => b.addEventListener('click', () => {
+    beds = +b.dataset.beds;
+    if (popup) popup.remove();
+    const url = new URL(location.href);
+    beds === 4 ? url.searchParams.set('beds', '4') : url.searchParams.delete('beds');
+    history.replaceState(null, '', url);
+    render();
+  }));
+  render();
+  document.getElementById('cbsa-toggle').addEventListener('change', e => {
+    const v = e.target.checked ? 'visible' : 'none';
+    ['cbsa-line', 'cbsa-label'].forEach(id => map.setLayoutProperty(id, 'visibility', v));
+  });
+
+  // ZIP search
+  const byZip = Object.fromEntries(zips.features.map(f => [f.properties.zip, f]));
+  const q = document.getElementById('q');
+  q.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const f = byZip[q.value.trim().padStart(5, '0')];
+    if (!f) { q.style.borderColor = COLORS.over; return; }
+    const b = new maplibregl.LngLatBounds();
+    f.geometry.coordinates.flat(2).forEach(c => b.extend(c));
+    map.fitBounds(b, { padding:60, maxZoom:13 });
+    const pt = zipPts.features[f.id].geometry.coordinates;
+    map.once('moveend', () => openPopup(pt, zipPopup(f.properties)));
+  });
+  q.addEventListener('input', () => q.style.borderColor = '');
+});
+
+const about = document.getElementById('about');
+document.getElementById('about-open').addEventListener('click', e => { e.preventDefault(); about.showModal(); });
+document.getElementById('about-close').addEventListener('click', () => about.close());
+about.addEventListener('click', e => { if (e.target === about) about.close(); });
+document.getElementById('toggle').addEventListener('click', e => {
+  const collapsed = document.getElementById('panel').classList.toggle('collapsed');
+  e.currentTarget.setAttribute('aria-expanded', String(!collapsed));
+});
+</script>
+</body>
+</html>
