@@ -113,7 +113,7 @@
     <p>For California and Florida, property taxes use new-buyer effective rates instead, as described below.</p>
 
     <h3>Home values</h3>
-    <p>Home values are the Zillow Home Value Index (ZHVI) for 3-bedroom and 4-bedroom homes, March 2026. This is the mid-tier series (35th to 65th price percentiles), smoothed and seasonally adjusted. See the <a href="https://www.zillow.com/research/methodology-neural-zhvi-32128/" target="_blank" rel="noopener">ZHVI methodology</a> and <a href="https://www.zillow.com/research/data/" target="_blank" rel="noopener">Zillow data</a>. Both home sizes use the same cost assumptions and income.</p>
+    <p>Home values are the Zillow Home Value Index (ZHVI) for 3-bedroom and 4-bedroom homes, March 2026. This is the mid-tier series (homes between the 35th and 65th percentiles of value), smoothed and seasonally adjusted. See the <a href="https://www.zillow.com/research/methodology-neural-zhvi-32128/" target="_blank" rel="noopener">ZHVI methodology</a> and <a href="https://www.zillow.com/research/data/" target="_blank" rel="noopener">Zillow data</a>. Both home sizes use the same cost assumptions and income.</p>
 
     <h3>Income</h3>
     <p>Metro area median family income for married-couple families where neither spouse is elderly (both aged 18–64), from the 2024 <a href="https://www.census.gov/programs-surveys/acs" target="_blank" rel="noopener">American Community Survey</a> 5-year sample, using <a href="https://usa.ipums.org/usa/" target="_blank" rel="noopener">IPUMS USA</a> microdata. Income is total family income in 2024 dollars, for metro areas approximated from Public Use Microdata Areas (PUMAs).</p>
@@ -176,7 +176,7 @@ const pct = r => (r * 100).toFixed(1) + '%';
 
 // color bands for the cost-to-income ratio; a band holds ratios above the previous cut up to its own
 const CUTS = [0.15, 0.20, 0.24, 0.28, 0.31, 0.35, 0.40, 0.45, 0.50];
-const BANDS = ['#00441b', '#238b45', '#41ab5d', '#74c476', '#a1d99b', '#fcbba1', '#fc9272', '#fb6a4a', '#cb181d', '#67000d'];
+const BANDS = ['#00441b', '#238b45', '#41ab5d', '#74c476', '#92d28f', '#fcad91', '#fc9272', '#fb6a4a', '#cb181d', '#67000d'];
 const BAND_NAMES = ['Under 15%', '15–20%', '20–24%', '24–28%', '28–31%', '31–35%', '35–40%', '40–45%', '45–50%', '50% and up'];
 const band = r => CUTS.filter(c => r > c).length;
 const inkOn = hex => {   // dark text on light swatches
@@ -261,7 +261,7 @@ map.on('load', async () => {
   if (map.getLayer('landuse_residential')) map.setLayoutProperty('landuse_residential', 'visibility', 'none');
   const BELOW_WATER = 'water', BELOW_LABELS = 'waterway_line_label', BELOW_PLACES = 'label_other';
   map.addLayer({ id:'zip-fill', type:'fill', source:'zips',
-    paint:{ 'fill-opacity':['interpolate', ['linear'], ['zoom'], 4, 0.75, 12, 0.5] } }, BELOW_WATER);
+    paint:{ 'fill-opacity':['interpolate', ['linear'], ['zoom'], 4, 0.9, 12, 0.7] } }, BELOW_WATER);
   map.addLayer({ id:'zip-line', type:'line', source:'zips', minzoom:7,
     paint:{ 'line-color':'#ffffff', 'line-opacity':0.7, 'line-width':['interpolate', ['linear'], ['zoom'], 7, 0.2, 12, 1] } }, BELOW_WATER);
   map.addLayer({ id:'cbsa-line', type:'line', source:'cbsa',
