@@ -56,6 +56,9 @@
   .ticks { position:relative; height:16px; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; }
   .ticks span { position:absolute; top:2px; transform:translateX(-50%); }
   .ticks span.key { color:var(--ink); font-weight:700; }
+  .formula .bands { display:flex; height:12px; border-radius:2px; overflow:hidden; margin-top:8px; }
+  .formula .bands span { flex:1; }
+  .formula .bands span:nth-child(6) { box-shadow:inset 2px 0 0 #fff; }
   .scale-foot { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin:2px 0 6px; }
   .scale-foot b { color:var(--ink); font-variant-numeric:tabular-nums; }
   @media (max-width:600px) {
@@ -107,8 +110,10 @@
   <div class="head"><h2>Methodology &amp; sources</h2><button id="about-close" aria-label="Close">×</button></div>
   <div class="content">
     <p>For each ZIP code, the map shows whether the annual cost of owning a typical 3-bedroom or 4-bedroom home exceeds 31% of the area's median family income for nonelderly married-couple households. It assumes a 6% 30-year fixed-rate mortgage, a 10% down payment and other assumptions from the Atlanta Fed's <a href="https://www.atlantafed.org/research-and-data/data/home-ownership-affordability-monitor" target="_blank" rel="noopener">Home Ownership Affordability Monitor</a>. The switch at the top of the legend changes the home size.</p>
-    <div class="formula">Ratio = annual ownership cost at a 6% 30-year fixed mortgage rate ÷ median family income for nonelderly married couples in the CBSA<br>
-      <span style="color:var(--over)">■</span> over 31% &nbsp; <span style="color:var(--under)">■</span> 31% or less &nbsp; <span style="color:var(--gray)">■</span> data not available</div>
+    <div class="formula">Ratio = annual ownership cost at a 6.0% 30-year fixed mortgage rate ÷ the metro area’s median income for non-elderly married couple families
+      <div class="bands" id="formula-bands"></div>
+      <div class="ticks" id="formula-ticks"></div>
+      <span style="color:var(--gray)">■</span> data not available</div>
     <p>31% is FHA's standard guideline for the maximum housing payment as a share of income, also known as the front-end ratio. Gray means the ZIP code is inside a covered CBSA, but data isn't available. This is usually because there's no Zillow home value for it.</p>
     <p>For California and Florida, property taxes use new-buyer effective rates instead, as described below.</p>
 
@@ -185,8 +190,11 @@ const inkOn = hex => {   // dark text on light swatches
 };
 document.getElementById('scale').innerHTML = BANDS.map((c, i) =>
   `<button data-band="${i}" aria-pressed="true" style="background:${c}" title="${BAND_NAMES[i]}" aria-label="${BAND_NAMES[i]}"></button>`).join('');
-document.getElementById('ticks').innerHTML = CUTS.map((c, i) =>
+const tickHtml = CUTS.map((c, i) =>
   `<span${c === LIMIT ? ' class="key"' : ''} style="left:${(i + 1) * 10}%">${Math.round(c * 100)}${i === CUTS.length - 1 ? '%' : ''}</span>`).join('');
+document.getElementById('ticks').innerHTML = tickHtml;
+document.getElementById('formula-ticks').innerHTML = tickHtml;
+document.getElementById('formula-bands').innerHTML = BANDS.map(c => `<span style="background:${c}"></span>`).join('');
 
 // data/*.json rows: properties plus g = polygons of delta-encoded integer rings (1e-4 degrees)
 function unpack(rows) {
